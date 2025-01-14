@@ -8,7 +8,7 @@ from typing import Optional
 try:
     client = ollama.Client()
     # Using the latest llama2 model
-    MODEL_NAME = "llama2"
+    MODEL_NAME = "llama-3-8b-web"
 except Exception as e:
     print(f"Error initializing Ollama: {e}")
     exit(1)
@@ -41,14 +41,8 @@ def scrape_website(url: str) -> Optional[str]:
 
 def analyze_content(content: str) -> str:
     """Analyze content using Ollama with improved prompt."""
-    try:
-        prompt = f"""Please analyze the following website content related to commercial construction:
-1. Extract key phrases related to commercial construction
-2. Identify main construction services or specialties
-3. Note any specific industry terminology
-4. Identify the company's main services or specialties
-5. Identify if the company is going to require a crm system
-
+    try: # Re-write prompt to tell ai what keywords to search for within the website
+        prompt = f"""Tell me the main services and markets that this company performs and tell me what pages you received the specific service-related keywords related within the website corresponding to each keyword. Ignore the words from companies blogs or article pages. I would suggest highlighting keywords related to commercial general contracting like pre-construction, construction management, design build or design-build, tenant improvements. 
 Content:
 {content[:4000]}  # Limit content length to avoid token limits
 """
@@ -60,7 +54,7 @@ Content:
         return f"Analysis error: {str(e)}"
 
 def main():
-    url = "https://dynamiccrest.in"  # Replace with the URL you want to analyze
+    url = "http://consecogroup.com"  # Replace with the URL you want to analyze
     print(f"Analyzing: {url}")
     
     website_content = scrape_website(url)

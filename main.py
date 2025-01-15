@@ -29,6 +29,10 @@ PROMPTS = [
             "pre-construction", "construction management", "design build", "design-build",
             "tenant improvements", "commercial", "commercial gc", "commercial general contractor", "general contracting"
         ]    
+        
+        See that the keywords can be in any case. 
+        
+        While responding only print the count of each keyword and nothing else. not even a greeting or anything. 
         """
     ),
     # (
@@ -142,7 +146,7 @@ def main():
                         if len(row) > 1:  # Ensure the row has at least two columns
                             account_name = row[0].strip()  # Assume the account name is in Column A
                             raw_html = row[1].strip()  # Assume the HTML content is in Column B
-                            print(f"\nExtracting URL from HTML at Row {row_index}: {raw_html}")
+                            # print(f"\nExtracting URL from HTML at Row {row_index}: {raw_html}")
 
                             extracted_url = extract_url_from_html(raw_html)
                             if not extracted_url:

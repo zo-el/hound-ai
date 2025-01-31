@@ -109,20 +109,45 @@ def is_site_live(url: str) -> bool:
 
 def extract_url_from_html(html_content: str) -> Optional[str]:
     """Extracts and decodes the URL from a given HTML <a> tag."""
-    soup = BeautifulSoup(html_content, 'html.parser')
-    a_tag = soup.find('a', href=True)  # Find the first <a> tag with an href attribute
-    if a_tag:
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        a_tag = soup.find('a', href=True)  # Find the first <a> tag with an href attribute
+        
+        if not a_tag:
+            return None
+            
         raw_url = a_tag['href']
-        # Check if the URL is JavaScript encoded
+        
+        # Handle JavaScript encoded URLs
         if "javascript:openPopupFocus" in raw_url:
-            match = re.search(r"http%3A%2F%2F[-\w.]+", raw_url)
+            # Look for both http and https encoded patterns
+            url_pattern = r"(?:http|https)%3A%2F%2F[-\w.]+(?:\/[-\w.%]*)*"
+            match = re.search(url_pattern, raw_url)
+            
             if match:
-                encoded_url = match.group()
+                encoded_url = match.group(0)
+                # Decode the URL
                 decoded_url = html.unescape(encoded_url)
                 decoded_url = decoded_url.replace('%3A', ':').replace('%2F', '/')
                 return decoded_url
-        return a_tag['href']  # Return the raw href if not encoded
-    return None
+                
+        # Handle direct URLs
+        elif raw_url.startswith(('http://', 'https://')):
+            # Extract just the main URL without query parameters
+            base_url = re.match(r'https?://[^?\s,\'\"]+', raw_url)
+            if base_url:
+                return base_url.group(0).rstrip('/')
+            return raw_url.split('?')[0].rstrip('/')
+        
+        # Handle URLs without protocol
+        elif raw_url.startswith('www.'):
+            return f'http://{raw_url.split("?")[0].rstrip("/")}'
+            
+        return raw_url.split('?')[0].rstrip('/')
+        
+    except Exception as e:
+        print(f"Error extracting URL: {e}")
+        return None
 
 
 def main():

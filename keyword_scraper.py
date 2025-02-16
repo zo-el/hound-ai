@@ -1,0 +1,185 @@
+from bs4 import BeautifulSoup
+import requests
+import csv
+import re
+import html
+import os
+from typing import Optional, List, Tuple
+
+# Define the keywords to search for
+KEYWORDS = [
+    "commercial construction", "general contractor", "construction management", "construction services", 
+    "project management", "contracting", "construction firm", "building contractor", "developer", 
+    "general construction", "contractor services", "professional services", "project developer", 
+    "commercial development", "commercial building", "retail construction", "industrial construction", 
+    "office space construction", "tenant improvements", "structural engineering", 
+    "interior buildouts", "design-build", "pre-construction services", "site development", "ground-up construction", 
+    "General Contractors", "Commercial", "Healthcare", "industrial"
+]
+
+def extract_url_from_html(html_content: str) -> Optional[str]:
+    """Extracts and decodes the URL from a given HTML <a> tag."""
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        a_tag = soup.find('a', href=True)  # Find the first <a> tag with an href attribute
+        
+        if not a_tag:
+            return None
+            
+        raw_url = a_tag['href']
+        
+        # Handle JavaScript encoded URLs
+        if "javascript:openPopupFocus" in raw_url:
+            # Look for both http and https encoded patterns
+            url_pattern = r"(?:http|https)%3A%2F%2F[-\w.]+(?:\/[-\w.%]*)*"
+            match = re.search(url_pattern, raw_url)
+            
+            if match:
+                encoded_url = match.group(0)
+                # Decode the URL
+                decoded_url = html.unescape(encoded_url)
+                decoded_url = decoded_url.replace('%3A', ':').replace('%2F', '/')
+                return decoded_url
+                
+        # Handle direct URLs
+        elif raw_url.startswith(('http://', 'https://')):
+            # Extract just the main URL without query parameters
+            base_url = re.match(r'https?://[^?\s,\'\"]+', raw_url)
+            if base_url:
+                return base_url.group(0).rstrip('/')
+            return raw_url.split('?')[0].rstrip('/')
+        
+        # Handle URLs without protocol
+        elif raw_url.startswith('www.'):
+            return f'http://{raw_url.split("?")[0].rstrip("/")}'
+            
+        return raw_url.split('?')[0].rstrip('/')
+        
+    except Exception as e:
+        print(f"Error extracting URL: {e}")
+        return None
+
+def is_site_live(url: str) -> bool:
+    """Check if the site is reachable."""
+    try:
+        response = requests.head(url, timeout=10)
+        return response.status_code < 400  # Site is live if status code is less than 400
+    except requests.exceptions.RequestException:
+        return False
+
+def scrape_website(url: str) -> Optional[str]:
+    """Scrape website content with proper headers."""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (compatible; KeywordScraperBot/1.0)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9',
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Remove unwanted elements
+        for element in soup(['script', 'style', 'header', 'footer', 'nav']):
+            element.decompose()
+            
+        # Get text with better formatting
+        text = ' '.join([p.get_text(strip=True) for p in soup.find_all(['p', 'h1', 'h2', 'h3', 'article'])])
+        return text if text.strip() else None
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error scraping {url}: {str(e)}")
+        return None
+
+def find_keywords(content: str) -> List[Tuple[str, str]]:
+    """Find keywords in the content and return their locations."""
+    found_keywords = []
+    for keyword in KEYWORDS:
+        keyword_lower = keyword.lower()
+        if keyword_lower in content.lower():
+            # Find the index of the keyword in the content
+            start_index = content.lower().index(keyword_lower)
+            end_index = start_index + len(keyword)
+            
+            # Get a snippet of text around the keyword for context
+            snippet_start = max(0, start_index - 30)  # Get 30 characters before the keyword
+            snippet_end = min(len(content), end_index + 30)  # Get 30 characters after the keyword
+            context = content[snippet_start:snippet_end].replace('\n', ' ').strip()  # Clean up newlines
+            
+            # Add the keyword and its context to the found list
+            found_keywords.append((keyword, f"Found in content: '{context}'"))
+    return found_keywords
+
+def main():
+    input_file = "input.csv"  # Path to your input CSV file
+    output_file = f"output/output-{os.path.splitext(os.path.basename(input_file))[0]}_results.csv"  # Output file with timestamp
+
+    try:
+        with open(input_file, newline='', encoding='utf-8') as file:
+            reader = csv.reader(file)
+            header = next(reader)  # Read the header row
+
+            # Define the updated header for the output file
+            updated_header = ['Account Name', 'Website', 'Is Site Live', 'Keywords Found', 'Proof']
+
+            with open(output_file, mode='w', newline='', encoding='utf-8') as output_csv:
+                writer = csv.writer(output_csv)
+                writer.writerow(updated_header)
+
+                for row_index, row in enumerate(reader, start=2):  # Start from Row 2
+                    try:
+                        if len(row) > 1:  # Ensure the row has at least two columns
+                            account_name = row[0].strip()  # Assume the account name is in Column A
+                            raw_html = row[1].strip()  # Assume the HTML content is in Column B
+
+                            extracted_url = extract_url_from_html(raw_html)
+                            if not extracted_url:
+                                error_message = "Failed to extract a valid URL."
+                                print(error_message)
+                                writer.writerow([account_name, "", "N/A", error_message, ""])  # Write error to output CSV
+                                continue
+
+                            print(f"Extracted URL: {extracted_url}")
+                            if not is_site_live(extracted_url):
+                                print(f"Site is not live: {extracted_url}")
+                                writer.writerow([account_name, extracted_url, "No", "N/A", "Site is not live"])  # Log site status
+                                continue
+
+                            website_content = scrape_website(extracted_url)
+                            if not website_content:
+                                print(f"Scraping failed for {extracted_url}")
+                                writer.writerow([account_name, extracted_url, "Yes", "N/A", "Scraping failed"])  # Log scraping status
+                                continue
+
+                            # Find keywords in the scraped content
+                            keywords_found = find_keywords(website_content)
+                            if keywords_found:
+                                keywords_str = ', '.join([kw[0] for kw in keywords_found])
+                                proof_str = ', '.join([kw[1] for kw in keywords_found])
+                            else:
+                                keywords_str = "None"
+                                proof_str = "N/A"
+
+                            # Write the results to the output CSV
+                            writer.writerow([account_name, extracted_url, "Yes", keywords_str, proof_str])
+
+                            print("\nResults:")
+                            print("-" * 50)
+                            print(f"Account Name: {account_name}")
+                            print(f"Website: {extracted_url}")
+                            print(f"Is Site Live: Yes")
+                            print(f"Keywords Found: {keywords_str}")
+                            print(f"Proof: {proof_str}")
+
+                    except Exception as e:
+                        print(f"An error occurred while processing row {row_index}: {e}")
+                        writer.writerow([account_name, "", "N/A", "Error", f"Error: {str(e)}"])  # Log the error
+
+    except FileNotFoundError:
+        print(f"Error: File '{input_file}' not found.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    main() 

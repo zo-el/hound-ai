@@ -19,35 +19,76 @@ except Exception as e:
     exit(1)
 
 PROMPTS = [
-
     (
         "Count Keywords", 
         """
-          count the number of times the keywords appear in the content. 
-          Keywords:
+        Count the number of times the keywords appear in website content. 
+        Keywords:
         [
-            "pre-construction", "construction management", "design build", "design-build",
-            "tenant improvements", "commercial", "commercial gc", "commercial general contractor", "general contracting"
+            "commercial construction", "general contractor", "construction management", "construction services", 
+            "project management", "contracting", "construction firm", "building contractor", "developer", 
+            "general construction", "contractor services", "professional services", "project developer", 
+            "commercial development", "commercial building", "retail construction", "industrial construction", 
+            "office space construction", "tenant improvements", "structural engineering", 
+            "interior buildouts", "design-build", "pre-construction services", "site development", "ground-up construction", "General Contractors", "Commercial", "Healthcare", "industrial"     
         ]    
         
-        See that the keywords can be in any case. 
+        - See that the keywords can be in any case.
+        - Ignore the words from companies blogs or article pages. 
+        - I want you to be very strict and only count the keywords that I have provided. 
         
-        While responding only print the count of each keyword and nothing else. not even a greeting or anything. 
+        While responding, provide the count of each keyword and the specific locations where they appear in the content. 
+        For example:
+        commercial construction: 10
+        Locations: [
+            - Found in the main page under the image of a building
+            - Found in the second paragraph of the About Us page
+        ]
+        general contractor: 5
+        Locations: [
+            - Found in the services section
+        ]
+
         """
     ),
-    # (
-    #     "Main Services and Markets", 
-    #     """
-    #         Tell me the main services and markets that this company performs and tell me what pages you received the specific service-related keywords related within the website corresponding to each keyword. 
-    #         Content:
-    #         {content[:4000]}  # Limit content length to avoid token limits
-    #     """
-    # ),
+    (
+        "Proof", 
+        """
+        Count the number of times the keywords appear in website content. 
+        Keywords:
+        [
+            "commercial construction", "general contractor", "construction management", "construction services", 
+            "project management", "contracting", "construction firm", "building contractor", "developer", 
+            "general construction", "contractor services", "professional services", "project developer", 
+            "commercial development", "commercial building", "retail construction", "industrial construction", 
+            "office space construction", "tenant improvements", "structural engineering", 
+            "interior buildouts", "design-build", "pre-construction services", "site development", "ground-up construction", "General Contractors", "Commercial", "Healthcare", "industrial"     
+        ]    
+        
+        - See that the keywords can be in any case.
+        - Ignore the words from companies blogs or article pages. 
+        - I want you to be very strict and only count the keywords that I have provided. 
+        
+        While responding, provide the exact page and a way to find the keyword. 
+        For example:
+        commercial construction: [
+            - Found on the main page under the image of a building
+            - In the subtext that is not visible on the page
+        ]
+        general contractor: [
+            - When you click on the About Us page, you will see it in the second paragraph
+        ]
+
+        """
+    ),
     # (
     #     "Keyword Analysis", 
     #     """
     #         Analyze the content for keywords related to commercial general contracting like pre-construction, construction management, design build or design-build, tenant improvements.
     #         Ignore the words from companies blogs or article pages. 
+    #         Content:
+    #           {content[:4000]}  # Limit content length to avoid token limits
+
     #   """
     # ),
 
@@ -86,16 +127,15 @@ def analyze_content(content: str, prompt: str) -> str:
         response = client.generate(model=MODEL_NAME, 
                                    prompt=prompt.format(content=content),
                                    stream=False)  # Set to True if you want to stream responses
-        return response['response']
-      
-        # # Print the response for debugging
-        # print(f"Response from Ollama: {response}")
+        
+        # Print the response for debugging
+        print(f"Response from Ollama: {response}")
 
-        # # Check if the response is a dictionary and contains the 'response' key
-        # if isinstance(response, dict) and 'response' in response:
-        #     return response['response']
-        # else:
-        #     return f"Unexpected response format: {response}"  # Handle unexpected response format
+        # Check if the response is a dictionary and contains the 'response' key
+        if isinstance(response, dict) and 'response' in response:
+            return response['response']
+        else:
+            return f"Unexpected response format: {response}"  # Handle unexpected response format
     except Exception as e:
         return f"Analysis error: {str(e)}"
 
@@ -171,7 +211,6 @@ def main():
                         if len(row) > 1:  # Ensure the row has at least two columns
                             account_name = row[0].strip()  # Assume the account name is in Column A
                             raw_html = row[1].strip()  # Assume the HTML content is in Column B
-                            # print(f"\nExtracting URL from HTML at Row {row_index}: {raw_html}")
 
                             extracted_url = extract_url_from_html(raw_html)
                             if not extracted_url:

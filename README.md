@@ -27,6 +27,10 @@ A Python tool that analyzes construction-related websites to extract relevant ke
   - Keywords expressing potential future interest (“interested”, “call back”, “not ready”)
   - Unresponsive accounts (“ghosted”, “unresponsive”, “not responding”)
 
+### Stage 4
+
+- Format the output into an Excel file with conditional formatting
+
 ## Prerequisites
 
 - Python 3.8+

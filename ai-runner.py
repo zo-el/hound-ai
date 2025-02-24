@@ -1,3 +1,24 @@
+# ## Usage
+
+# 1. Make sure Ollama is running
+# 2. Edit the URL in main.py to target your desired website
+# 3. Run the script:
+
+# ```bash
+# python main.py
+# ```
+
+# ## Configuration
+
+# - Adjust the `MODEL_NAME` in main.py to use different Ollama models
+# - Modify the scraping delay in `scrape_website()` if needed
+# - Customize the analysis prompt in `analyze_content()`
+
+# ## Rate Limiting
+
+# The tool includes a 1-second delay between requests to be respectful to web servers. Adjust this value based on your needs and the website's terms of service.
+
+
 from bs4 import BeautifulSoup
 import requests
 import ollama

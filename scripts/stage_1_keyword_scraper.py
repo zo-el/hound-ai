@@ -113,7 +113,7 @@ def find_keywords(content: str) -> List[Tuple[str, str]]:
 
 def main():
     input_file = "input.csv"  # Path to your input CSV file
-    output_file = f"output/output-{os.path.splitext(os.path.basename(input_file))[0]}_results.csv"  # Output file with timestamp
+    output_file = f"output/stage_1_output.csv"  # Output file with timestamp
 
     try:
         with open(input_file, newline='', encoding='utf-8') as file:

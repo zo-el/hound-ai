@@ -5,6 +5,9 @@ import re
 import html
 import os
 from typing import Optional, List, Tuple
+import multiprocessing
+from functools import partial
+from tqdm import tqdm
 
 # Define the keywords to search for
 KEYWORDS = [
@@ -111,75 +114,122 @@ def find_keywords(content: str) -> List[Tuple[str, str]]:
             found_keywords.append((keyword, f"Found in content: '{context}'"))
     return found_keywords
 
+def process_row(row: List[str]) -> Optional[List[str]]:
+    """Process a single row of data."""
+    try:
+        if len(row) > 1:
+            account_name = row[0].strip()
+            raw_html = row[1].strip()
+
+            extracted_url = extract_url_from_html(raw_html)
+            if not extracted_url:
+                return [account_name, "", "N/A", "Failed to extract a valid URL.", ""]
+
+            if not is_site_live(extracted_url):
+                return [account_name, extracted_url, "No", "N/A", "Site is not live"]
+
+            website_content = scrape_website(extracted_url)
+            if not website_content:
+                return [account_name, extracted_url, "Yes", "N/A", "Scraping failed"]
+
+            keywords_found = find_keywords(website_content)
+            if keywords_found:
+                keywords_str = ', '.join([kw[0] for kw in keywords_found])
+                proof_str = ', '.join([kw[1] for kw in keywords_found])
+            else:
+                keywords_str = "None"
+                proof_str = "N/A"
+
+            return [account_name, extracted_url, "Yes", keywords_str, proof_str]
+
+    except Exception as e:
+        return [account_name, "", "N/A", "Error", f"Error: {str(e)}"]
+
 def main():
-    input_file = "input.csv"  # Path to your input CSV file
-    output_file = f"output/stage_1_output.csv"  # Output file with timestamp
+    # Update input and output paths
+    input_file = "inputs/input.csv"  # Update to correct input path
+    output_file = "output/stage_1_output.csv"
+    
+    print(f"\nStarting script...")
+    print(f"Looking for input file: {os.path.abspath(input_file)}")
+    
+    # Ensure output directory exists
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    print(f"Output will be written to: {os.path.abspath(output_file)}")
 
     try:
+        if not os.path.exists(input_file):
+            raise FileNotFoundError(f"Input file not found at: {os.path.abspath(input_file)}")
+
+        # Read all rows from input file
+        print("Reading input file...")
         with open(input_file, newline='', encoding='utf-8') as file:
             reader = csv.reader(file)
-            header = next(reader)  # Read the header row
+            header = next(reader)  # Skip header
+            print(f"Header found: {header}")
+            rows = list(reader)
+            print(f"Found {len(rows)} rows to process")
 
-            # Define the updated header for the output file
-            updated_header = ['Account Name', 'Website', 'Is Site Live', 'Keywords Found', 'Proof']
+        if not rows:
+            print(f"Warning: No data found in {input_file}")
+            return
 
-            with open(output_file, mode='w', newline='', encoding='utf-8') as output_csv:
-                writer = csv.writer(output_csv)
-                writer.writerow(updated_header)
+        # Create output file with header
+        print("Creating output file...")
+        with open(output_file, mode='w', newline='', encoding='utf-8') as output_csv:
+            writer = csv.writer(output_csv)
+            writer.writerow(['Account Name', 'Website', 'Is Site Live', 'Keywords Found', 'Proof'])
 
-                for row_index, row in enumerate(reader, start=2):  # Start from Row 2
-                    try:
-                        if len(row) > 1:  # Ensure the row has at least two columns
-                            account_name = row[0].strip()  # Assume the account name is in Column A
-                            raw_html = row[1].strip()  # Assume the HTML content is in Column B
+        # Create a pool of workers
+        num_processes = min(multiprocessing.cpu_count(), len(rows))  # Don't create more processes than rows
+        print(f"\nInitializing {num_processes} worker processes...")
+        pool = multiprocessing.Pool(processes=num_processes)
 
-                            extracted_url = extract_url_from_html(raw_html)
-                            if not extracted_url:
-                                error_message = "Failed to extract a valid URL."
-                                print(error_message)
-                                writer.writerow([account_name, "", "N/A", error_message, ""])  # Write error to output CSV
-                                continue
+        # Process rows in parallel with progress bar
+        print(f"Processing {len(rows)} URLs using {num_processes} processes...")
+        results = []
+        for row_data in tqdm(pool.imap_unordered(process_row, rows), total=len(rows)):
+            if row_data:
+                results.append(row_data)
 
-                            print(f"Extracted URL: {extracted_url}")
-                            if not is_site_live(extracted_url):
-                                print(f"Site is not live: {extracted_url}")
-                                writer.writerow([account_name, extracted_url, "No", "N/A", "Site is not live"])  # Log site status
-                                continue
+        pool.close()
+        pool.join()
 
-                            website_content = scrape_website(extracted_url)
-                            if not website_content:
-                                print(f"Scraping failed for {extracted_url}")
-                                writer.writerow([account_name, extracted_url, "Yes", "N/A", "Scraping failed"])  # Log scraping status
-                                continue
+        # Write all results at once
+        print("\nWriting results to file...")
+        with open(output_file, mode='a', newline='', encoding='utf-8') as output_csv:
+            writer = csv.writer(output_csv)
+            writer.writerows(results)
 
-                            # Find keywords in the scraped content
-                            keywords_found = find_keywords(website_content)
-                            if keywords_found:
-                                keywords_str = ', '.join([kw[0] for kw in keywords_found])
-                                proof_str = ', '.join([kw[1] for kw in keywords_found])
-                            else:
-                                keywords_str = "None"
-                                proof_str = "N/A"
+        # Verify output was written
+        if os.path.exists(output_file):
+            print(f"\nProcessing complete!")
+            print(f"Results processed: {len(results)}")
+            print(f"Output written to: {os.path.abspath(output_file)}")
+            
+            # Check output file size
+            file_size = os.path.getsize(output_file)
+            print(f"Output file size: {file_size} bytes")
+            
+            # Read and print first few lines of output
+            print("\nFirst few lines of output:")
+            with open(output_file, 'r', encoding='utf-8') as f:
+                for i, line in enumerate(f):
+                    if i < 5:  # Print first 5 lines
+                        print(line.strip())
+                    else:
+                        break
+        else:
+            print("\nWarning: Output file was not created")
 
-                            # Write the results to the output CSV
-                            writer.writerow([account_name, extracted_url, "Yes", keywords_str, proof_str])
-
-                            print("\nResults:")
-                            print("-" * 50)
-                            print(f"Account Name: {account_name}")
-                            print(f"Website: {extracted_url}")
-                            print(f"Is Site Live: Yes")
-                            print(f"Keywords Found: {keywords_str}")
-                            print(f"Proof: {proof_str}")
-
-                    except Exception as e:
-                        print(f"An error occurred while processing row {row_index}: {e}")
-                        writer.writerow([account_name, "", "N/A", "Error", f"Error: {str(e)}"])  # Log the error
-
-    except FileNotFoundError:
-        print(f"Error: File '{input_file}' not found.")
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"An unexpected error occurred: {e}")
+        import traceback
+        print(traceback.format_exc())
 
 if __name__ == "__main__":
+    # Protect against recursive multiprocessing on Windows
+    multiprocessing.freeze_support()
     main() 

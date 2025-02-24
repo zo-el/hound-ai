@@ -1,6 +1,5 @@
-
 setup:
-	pip install requests beautifulsoup4 ollama pandas
+	pip install requests beautifulsoup4 ollama pandas tqdm
 
 stage_1:
 	python3 scripts/stage_1_keyword_scraper.py

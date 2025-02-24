@@ -27,7 +27,7 @@ A Python tool that analyzes construction-related websites to extract relevant ke
 
 ### Stage 3
 
-- The we will search for keywords across the fields containing qualitative data
+- Search for keywords across the fields containing qualitative data
   - (Lead Score Reason Description, BDR Next Step, Reason for Win/Loss - Description, Qualification Notes etc)
   - Keywords we could search for would be related their objections (“price”, “pricing”, “cheap”, “afford”)
   - Keywords expressing potential future interest (“interested”, “call back”, “not ready”)

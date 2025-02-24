@@ -306,15 +306,26 @@ def main():
                     results.append(result)
         
         # Create results DataFrame
-        results_df = pd.DataFrame(results)
+        sentiment_df = pd.DataFrame(results)
+        
+        # Merge sentiment analysis results with stage 2 data
+        logger.info("Merging sentiment analysis with stage 2 data...")
+        final_df = pd.merge(
+            stage2_df,  # Keep all columns from stage 2
+            sentiment_df[['Account Name', 'Latest Status', 'Engagement Score', 'Sentiment Score', 
+                         'Interest Level', 'Key Objections', 'Latest Activity', 'Data Confidence',
+                         'Positive Patterns', 'Negative Patterns']],  # Add new columns from stage 3
+            on='Account Name',
+            how='left'
+        )
         
         # Save results
         logger.info(f"Saving results to {output_path}")
-        results_df.to_csv(output_path, index=False)
+        final_df.to_csv(output_path, index=False)
         
         # Generate and save summary
         logger.info("Generating summary report...")
-        generate_summary_report(results_df, summary_path)
+        generate_summary_report(final_df, summary_path)
         
         # Verify output
         if os.path.exists(output_path):

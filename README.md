@@ -6,16 +6,10 @@ A Python tool that analyzes construction-related websites to extract relevant ke
 
 ## Functionality
 
-###Context:
+### Context
 
 - The salesforce.csv contains the account and opportunity data.
 - The outreach.csv contains the call dispositions.
-
-<!--
-- The Account Name field could serve as somewhat of a primary key for all of the data.
-1. The structure would be an Account Table with the following fields (account name, city, state, website, # of pipeline opps, last sales activity, last connected call date, Lead Score Reason Description, BDR Next Step, PM Software, Accounting Software, Account Owner)
-1. The next table is an Opportunity Table that connects to the Account Table based on the Account Name. It contains the following fields (Opportunity Name, Close Date, Primary Reason for Win/Loss, Reason for Win/Loss - Description, Qualification Notes, Opportunity Owner)
-1. The next table is an Outreach Table that also connects to the Account Table based on the Account Name. It contains the following fields (Prospect Name, Date, Call Duration, Call Result, Comments) -->
 
 ### Stage 1
 
@@ -36,13 +30,4 @@ A Python tool that analyzes construction-related websites to extract relevant ke
 ## Prerequisites
 
 - Python 3.8+
-- Ollama installed and running locally (see [Ollama installation guide](https://github.com/ollama/ollama))
-
-## Installation
-
-1. Clone this repository
-2. Install dependencies:
-
-```bash
-pip install requests beautifulsoup4 ollama
-```
+- [for deprecated ai runner]Ollama installed and running locally (see [Ollama installation guide](https://github.com/ollama/ollama))

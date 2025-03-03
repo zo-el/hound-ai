@@ -23,85 +23,105 @@ from bs4 import BeautifulSoup
 import requests
 import ollama
 import time
-from typing import Optional
+from typing import Optional, Dict, List, Tuple
 import re  # For pattern matching
 import html  # For decoding HTML entities
 import csv  # Import the csv module
 import os
 from datetime import datetime
+import multiprocessing
+from functools import partial
+from tqdm import tqdm
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize the model
 try:
     client = ollama.Client()
     # Using the latest llama2 model
-    MODEL_NAME = "llama2"
+    MODEL_NAME = "llama3.2"
 except Exception as e:
-    print(f"Error initializing Ollama: {e}")
+    logger.error(f"Error initializing Ollama: {e}")
     exit(1)
 
 PROMPTS = [
     (
-        "Count Keywords", 
+        "Find keywords",
         """
-        Count the number of times the keywords appear in website content. 
-        Keywords:
-        [
-            "commercial construction", "general contractor", "construction management", "construction services", 
-            "project management", "contracting", "construction firm", "building contractor", "developer", 
-            "general construction", "contractor services", "professional services", "project developer", 
-            "commercial development", "commercial building", "retail construction", "industrial construction", 
-            "office space construction", "tenant improvements", "structural engineering", 
-            "interior buildouts", "design-build", "pre-construction services", "site development", "ground-up construction", "General Contractors", "Commercial", "Healthcare", "industrial"     
-        ]    
+        Analyze the following website content and extract keywords related to construction services. 
+        Focus on terms like commercial construction, general contractor, design-build, etc.
         
-        - See that the keywords can be in any case.
-        - Ignore the words from companies blogs or article pages. 
-        - I want you to be very strict and only count the keywords that I have provided. 
+        Only respond with the found keywords, separated by commas. If no keywords are found, respond with "No relevant keywords found."
         
-        While responding, provide the count of each keyword and the specific locations where they appear in the content. 
-        For example:
-        commercial construction: 10
-        Locations: [
-            - Found in the main page under the image of a building
-            - Found in the second paragraph of the About Us page
-        ]
-        general contractor: 5
-        Locations: [
-            - Found in the services section
-        ]
+        Content to analyze:
+        {content}
+        """
+    )
+    # (
+    #     "Count Keywords", 
+    #     """
+    #     Count the number of times the keywords appear in website content. 
+    #     Keywords:
+    #     [
+    #         "commercial construction", "general contractor", "construction management", "construction services", 
+    #         "project management", "contracting", "construction firm", "building contractor", "developer", 
+    #         "general construction", "contractor services", "professional services", "project developer", 
+    #         "commercial development", "commercial building", "retail construction", "industrial construction", 
+    #         "office space construction", "tenant improvements", "structural engineering", 
+    #         "interior buildouts", "design-build", "pre-construction services", "site development", "ground-up construction", "General Contractors", "Commercial", "Healthcare", "industrial"     
+    #     ]    
+        
+    #     - See that the keywords can be in any case.
+    #     - Ignore the words from companies blogs or article pages. 
+    #     - I want you to be very strict and only count the keywords that I have provided. 
+        
+    #     While responding, provide the count of each keyword and the specific locations where they appear in the content. 
+    #     For example:
+    #     commercial construction: 10
+    #     Locations: [
+    #         - Found in the main page under the image of a building
+    #         - Found in the second paragraph of the About Us page
+    #     ]
+    #     general contractor: 5
+    #     Locations: [
+    #         - Found in the services section
+    #     ]
 
-        """
-    ),
-    (
-        "Proof", 
-        """
-        Count the number of times the keywords appear in website content. 
-        Keywords:
-        [
-            "commercial construction", "general contractor", "construction management", "construction services", 
-            "project management", "contracting", "construction firm", "building contractor", "developer", 
-            "general construction", "contractor services", "professional services", "project developer", 
-            "commercial development", "commercial building", "retail construction", "industrial construction", 
-            "office space construction", "tenant improvements", "structural engineering", 
-            "interior buildouts", "design-build", "pre-construction services", "site development", "ground-up construction", "General Contractors", "Commercial", "Healthcare", "industrial"     
-        ]    
+    #     """
+    # ),
+    # (
+    #     "Proof", 
+    #     """
+    #     Count the number of times the keywords appear in website content. 
+    #     Keywords:
+    #     [
+    #         "commercial construction", "general contractor", "construction management", "construction services", 
+    #         "project management", "contracting", "construction firm", "building contractor", "developer", 
+    #         "general construction", "contractor services", "professional services", "project developer", 
+    #         "commercial development", "commercial building", "retail construction", "industrial construction", 
+    #         "office space construction", "tenant improvements", "structural engineering", 
+    #         "interior buildouts", "design-build", "pre-construction services", "site development", "ground-up construction", "General Contractors", "Commercial", "Healthcare", "industrial"     
+    #     ]    
         
-        - See that the keywords can be in any case.
-        - Ignore the words from companies blogs or article pages. 
-        - I want you to be very strict and only count the keywords that I have provided. 
+    #     - See that the keywords can be in any case.
+    #     - Ignore the words from companies blogs or article pages. 
+    #     - I want you to be very strict and only count the keywords that I have provided. 
         
-        While responding, provide the exact page and a way to find the keyword. 
-        For example:
-        commercial construction: [
-            - Found on the main page under the image of a building
-            - In the subtext that is not visible on the page
-        ]
-        general contractor: [
-            - When you click on the About Us page, you will see it in the second paragraph
-        ]
+    #     While responding, provide the exact page and a way to find the keyword. 
+    #     For example:
+    #     commercial construction: [
+    #         - Found on the main page under the image of a building
+    #         - In the subtext that is not visible on the page
+    #     ]
+    #     general contractor: [
+    #         - When you click on the About Us page, you will see it in the second paragraph
+    #     ]
 
-        """
-    ),
+    #     """
+    # ),
     # (
     #     "Keyword Analysis", 
     #     """
@@ -145,19 +165,21 @@ def scrape_website(url: str) -> Optional[str]:
 def analyze_content(content: str, prompt: str) -> str:
     """Analyze content using Ollama with the provided prompt."""
     try:
-        response = client.generate(model=MODEL_NAME, 
-                                   prompt=prompt.format(content=content),
-                                   stream=False)  # Set to True if you want to stream responses
+        response = client.generate(
+            model=MODEL_NAME, 
+            prompt=prompt.format(content=content),
+            stream=False
+        )
         
-        # Print the response for debugging
-        print(f"Response from Ollama: {response}")
-
-        # Check if the response is a dictionary and contains the 'response' key
-        if isinstance(response, dict) and 'response' in response:
-            return response['response']
+        # Handle the response - Ollama returns the response directly in the 'response' field
+        if isinstance(response, dict):
+            return response.get('response', f"Error: Unexpected response format - {response}")
         else:
-            return f"Unexpected response format: {response}"  # Handle unexpected response format
+            # If response is not a dict, it might be the direct response string
+            return str(response)
+
     except Exception as e:
+        logger.error(f"Analysis error in analyze_content: {str(e)}")
         return f"Analysis error: {str(e)}"
 
 def is_site_live(url: str) -> bool:
@@ -210,72 +232,115 @@ def extract_url_from_html(html_content: str) -> Optional[str]:
         print(f"Error extracting URL: {e}")
         return None
 
+def process_row(row: List[str]) -> Optional[List[str]]:
+    """Process a single row of data."""
+    try:
+        if len(row) > 1:
+            account_name = row[0].strip()
+            raw_html = row[1].strip()
+
+            # Extract and validate URL
+            extracted_url = extract_url_from_html(raw_html)
+            if not extracted_url:
+                return [account_name, "", "N/A", "Failed to extract a valid URL."] + [""] * len(PROMPTS)
+
+            # Check if site is live
+            if not is_site_live(extracted_url):
+                return [account_name, extracted_url, "No", "Site is not live"] + [""] * len(PROMPTS)
+
+            # Scrape website content
+            website_content = scrape_website(extracted_url)
+            if not website_content or "Error:" in str(website_content):
+                return [account_name, extracted_url, "Yes", "Scraping failed"] + [""] * len(PROMPTS)
+
+            # Analyze content with each prompt
+            results = []
+            for _, prompt in PROMPTS:
+                result = analyze_content(website_content, prompt)
+                results.append(result)
+
+            return [account_name, extracted_url, "Yes", ""] + results
+
+    except Exception as e:
+        print(f"Error processing row: {str(e)}")
+        return [account_name, "", "N/A", f"Error: {str(e)}"] + [""] * len(PROMPTS)
 
 def main():
     input_file = "input.csv"  # Path to your input CSV file
     output_file = f"output/output-{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"  # Output file with timestamp
 
+    logger.info("\nStarting AI analysis...")
+    logger.info(f"Looking for input file: {os.path.abspath(input_file)}")
+    
+    # Ensure output directory exists
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    logger.info(f"Output will be written to: {os.path.abspath(output_file)}")
+
     try:
+        # Validate input file
+        if not os.path.exists(input_file):
+            raise FileNotFoundError(f"Input file not found at: {os.path.abspath(input_file)}")
+
+        # Read input data
+        logger.info("Reading input file...")
         with open(input_file, newline='', encoding='utf-8') as file:
             reader = csv.reader(file)
-            header = next(reader)  # Read the header row
+            header = next(reader)
+            rows = list(reader)
+            logger.info(f"Found {len(rows)} rows to process")
 
-            # Define the updated header for the output file
-            updated_header = ['Account Name', 'Website', 'Is Site Live', 'Error'] + [title for title, _ in PROMPTS]
+        if not rows:
+            logger.warning(f"No data found in {input_file}")
+            return
 
-            with open(output_file, mode='w', newline='', encoding='utf-8') as output_csv:
-                writer = csv.writer(output_csv)
-                writer.writerow(updated_header)
+        # Create output file with header
+        updated_header = ['Account Name', 'Website', 'Is Site Live', 'Error'] + [title for title, _ in PROMPTS]
+        with open(output_file, mode='w', newline='', encoding='utf-8') as output_csv:
+            writer = csv.writer(output_csv)
+            writer.writerow(updated_header)
 
-                for row_index, row in enumerate(reader, start=2):  # Start from Row 2
-                    try:
-                        if len(row) > 1:  # Ensure the row has at least two columns
-                            account_name = row[0].strip()  # Assume the account name is in Column A
-                            raw_html = row[1].strip()  # Assume the HTML content is in Column B
+        # Process rows in parallel
+        num_processes = min(multiprocessing.cpu_count(), len(rows))
+        logger.info(f"\nInitializing {num_processes} worker processes...")
+        
+        with multiprocessing.Pool(processes=num_processes) as pool:
+            results = []
+            for result in tqdm(
+                pool.imap_unordered(process_row, rows),
+                total=len(rows),
+                desc="Processing accounts"
+            ):
+                if result:
+                    results.append(result)
 
-                            extracted_url = extract_url_from_html(raw_html)
-                            if not extracted_url:
-                                error_message = "Failed to extract a valid URL."
-                                print(error_message)
-                                writer.writerow([account_name, "", "N/A", error_message])  # Write error to output CSV
-                                continue
+        # Write all results at once
+        logger.info("\nWriting results to file...")
+        with open(output_file, mode='a', newline='', encoding='utf-8') as output_csv:
+            writer = csv.writer(output_csv)
+            writer.writerows(results)
 
-                            print(f"Extracted URL: {extracted_url}")
-                            if not is_site_live(extracted_url):
-                                print(f"Site is not live: {extracted_url}")
-                                writer.writerow([account_name, extracted_url, "No", "Site is not live"])  # Log site status
-                                continue
+        # Verify output
+        if os.path.exists(output_file):
+            file_size = os.path.getsize(output_file)
+            logger.info(f"\nProcessing complete!")
+            logger.info(f"Results processed: {len(results)}")
+            logger.info(f"Output file size: {file_size} bytes")
+            
+            logger.info("\nFirst few lines of output:")
+            with open(output_file, 'r', encoding='utf-8') as f:
+                for i, line in enumerate(f):
+                    if i < 5:
+                        print(line.strip())
+                    else:
+                        break
+        else:
+            logger.warning("Warning: Output file was not created")
 
-                            website_content = scrape_website(extracted_url)
-                            if not website_content or "Error:" in str(website_content):
-                                print(f"Scraping failed: {website_content}")
-                                writer.writerow([account_name, extracted_url, "Yes", "Scraping failed"])  # Log scraping status
-                                continue
-
-                            # Iterate through the prompts and analyze the content
-                            results = []
-                            for title, prompt in PROMPTS:
-                                result = analyze_content(website_content, prompt)
-                                results.append(result)
-
-                            # Write the results to the output CSV
-                            writer.writerow([account_name, extracted_url, "Yes", ""] + results)
-
-                            print("\nAnalysis Results:")
-                            print("-" * 50)
-                            print(f"Account Name: {account_name}")
-                            print(f"Is Site Live: Yes")
-                            for title, result in zip([t for t, _ in PROMPTS], results):
-                                print(f"{title}: {result}")
-
-                    except Exception as e:
-                        print(f"An error occurred while processing row {row_index}: {e}")
-                        writer.writerow([account_name, "", "N/A", f"Error: {str(e)}"])  # Log the error
-
-    except FileNotFoundError:
-        print(f"Error: File '{input_file}' not found.")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logger.error(f"An error occurred: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     main()

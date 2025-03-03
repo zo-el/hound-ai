@@ -1,3 +1,6 @@
+analyze_keywords:
+	python3 scripts/analyze_keywords.py
+
 setup:
 	pip install requests beautifulsoup4 ollama pandas tqdm openpyxl
 
@@ -13,4 +16,7 @@ stage_3:
 stage_4:
 	python3 scripts/stage_4_excel_formatter.py
 
-all: stage_1 stage_2 stage_3 stage_4
+calculate_scores:
+	python3 scripts/calculate_company_scores.py
+
+all: stage_1 stage_2 stage_3 stage_4 analyze_keywords calculate_scores

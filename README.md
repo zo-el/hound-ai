@@ -11,9 +11,18 @@ A Python tool that analyzes construction-related websites to extract relevant ke
 - The salesforce.csv contains the account and opportunity data.
 - The outreach.csv contains the call dispositions.
 
+### Pre-setup
+
+- we use the list of closed accounts(completed sucessfull opportunities) to generate a list of keywords from their website 
+- use the analyze_keywords script to give a score to each keyword that will be used in stage 1.2
+
 ### Stage 1
 
 - Scrape all websites from the Salesforce Export report and store those in an output file
+
+### Stage 1.2
+
+- The script will calculate the company scores based on scores that were calculated on pre-setup
 
 ### Stage 2
 

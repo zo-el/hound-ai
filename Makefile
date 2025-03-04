@@ -7,6 +7,9 @@ setup:
 stage_1:
 	python3 scripts/stage_1_keyword_scraper.py
 
+stage_1.2:
+	python3 scripts/stage_1_2_calculate_company_scores.py
+
 stage_2:
 	python3 scripts/stage_2_account_status.py
 
@@ -16,7 +19,4 @@ stage_3:
 stage_4:
 	python3 scripts/stage_4_excel_formatter.py
 
-calculate_scores:
-	python3 scripts/calculate_company_scores.py
-
-all: stage_1 stage_2 stage_3 stage_4 analyze_keywords calculate_scores
+all: stage_1 stage_1_2 stage_2 stage_3 stage_4 

@@ -98,7 +98,7 @@ def main():
         logger.info("\nStarting stage 2 processing...")
         
         # Define input/output paths
-        stage1_path = 'output/stage_1_output.csv'
+        stage1_path = 'output/stage_1_2_output.csv'
         outreach_path = 'inputs/outreach.csv'
         output_path = 'output/stage_2_output.csv'
         

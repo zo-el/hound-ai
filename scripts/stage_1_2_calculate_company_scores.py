@@ -42,7 +42,7 @@ def load_keyword_weights(weights_file: str) -> Dict[str, float]:
     try:
         if os.path.exists(weights_file):
             weights_df = pd.read_csv(weights_file)
-            return dict(zip(weights_df['keyword'].str.lower(), weights_df['weight']))
+            return dict(zip(weights_df['Keyword'].str.lower(), weights_df['Frequency']))
         else:
             logger.warning(f"Weights file not found: {weights_file}. Using default weights.")
             return DEFAULT_KEYWORD_WEIGHTS
@@ -90,9 +90,9 @@ def main():
         
         # Define input/output paths
         stage1_path = 'output/stage_1_output.csv'
-        weights_path = 'inputs/keyword_weights.csv'
-        output_path = 'output/company_scores.csv'
-        detailed_output_path = 'output/company_scores_detailed.csv'
+        weights_path = 'inputs/keyword_frequency.csv'
+        output_path = 'output/stage_1_2_output.csv'
+        detailed_output_path = 'output/stage_1_2_output_detailed.csv'
         
         # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
